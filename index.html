@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phone Link</title>
+<style>
+  :root { --bg:#0f1419; --panel:#182029; --fg:#e6e8eb; --muted:#8a949e; --accent:#72d7ee; --ok:#5ecb8a; --bad:#ef6b6b; }
+  * { box-sizing:border-box; }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, sans-serif; }
+  main { max-width:560px; margin:0 auto; display:grid; gap:12px; }
+  section { background:var(--panel); border-radius:12px; padding:14px; display:grid; gap:10px; }
+  h1 { font-size:20px; margin:0; }
+  h2 { font-size:14px; margin:0; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
+  .row { display:flex; gap:8px; }
+  input { flex:1; min-width:0; padding:10px; border-radius:8px; border:1px solid #2b3642; background:#0c1116; color:var(--fg); font-size:16px; }
+  button { padding:10px 14px; border-radius:8px; border:0; background:var(--accent); color:#06222b; font-weight:600; font-size:16px; }
+  button.secondary { background:#2b3642; color:var(--fg); }
+  #state { font-weight:600; }
+  .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
+  #log { height:260px; overflow:auto; font:13px/1.5 ui-monospace, monospace; background:#0c1116; border-radius:8px; padding:8px; margin:0; white-space:pre-wrap; word-break:break-all; }
+  #checks { margin:0; padding-left:18px; font-size:14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Phone Link test</h1>
+
+  <section>
+    <h2>Roku</h2>
+    <div class="row">
+      <input id="addr" placeholder="192.168.1.42:8888" inputmode="url" autocomplete="off">
+      <button id="connect">Connect</button>
+    </div>
+    <div>Status: <span id="state" class="muted">disconnected</span></div>
+    <ul id="checks"></ul>
+  </section>
+
+  <section>
+    <h2>Send</h2>
+    <div class="row">
+      <input id="text" placeholder="Text to show on TV">
+      <button id="sendText">Send</button>
+    </div>
+    <div class="row">
+      <button id="ping" class="secondary">Ping</button>
+      <span id="rtt" class="muted" style="align-self:center"></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Events from Roku</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let base = null, es = null, pingSent = {};
+
+// Address: ?roku=ip:port beats saved value
+const params = new URLSearchParams(location.search);
+let saved = null;
+try { saved = localStorage.getItem('rokuAddr'); } catch {}
+$('addr').value = params.get('roku') || saved || '';
+
+function log(line, cls) {
+  const div = document.createElement('div');
+  div.textContent = new Date().toLocaleTimeString() + '  ' + line;
+  if (cls) div.className = cls;
+  $('log').prepend(div);
+}
+function setState(text, cls) { $('state').textContent = text; $('state').className = cls; }
+function check(label, ok, detail = '') {
+  const li = document.createElement('li');
+  li.className = ok ? 'ok' : 'bad';
+  li.textContent = (ok ? 'OK  ' : 'FAIL  ') + label + (detail ? ' - ' + detail : '');
+  $('checks').append(li);
+}
+
+// targetAddressSpace tells Chromium's Local Network Access this is an intentional
+// local request (needed for the mixed-content exemption from an https page).
+const lnaOpts = { targetAddressSpace: 'local' };
+
+async function connect() {
+  const addr = $('addr').value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+  if (!addr) return;
+  try { localStorage.setItem('rokuAddr', addr); } catch {}
+  base = 'http://' + addr;
+  if (es) es.close();
+  $('checks').innerHTML = '';
+  check('page origin', true, location.origin + (window.isSecureContext ? ' (secure)' : ' (not secure)'));
+
+  // 1. simple GET: exercises LNA permission + mixed content + CORS response headers
+  setState('checking /status...', 'muted');
+  try {
+    const r = await fetch(base + '/status', { ...lnaOpts, cache: 'no-store' });
+    const j = await r.json();
+    check('GET /status', r.ok, `${j.name || ''} ${j.model || ''}`.trim());
+  } catch (e) {
+    check('GET /status', false, e.message + ' (permission denied, mixed content, CORS, or wrong address - see console)');
+    setState('failed', 'bad');
+    return;
+  }
+
+  // 2. JSON POST: exercises the CORS preflight (OPTIONS)
+  try {
+    await send({ type: 'ping', id: 'preflight-test' });
+    check('POST /cmd (preflight)', true);
+  } catch (e) {
+    check('POST /cmd (preflight)', false, e.message);
+  }
+
+  // 3. SSE stream for Roku -> phone
+  setState('opening event stream...', 'muted');
+  es = new EventSource(base + '/events');
+  es.onopen = () => { setState('connected', 'ok'); };
+  es.onerror = () => { setState('reconnecting...', 'bad'); };
+  es.onmessage = (ev) => {
+    let data; try { data = JSON.parse(ev.data); } catch { data = ev.data; }
+    if (data.type === 'hello') check('SSE /events', true);
+    if (data.type === 'pong' && pingSent[data.id]) {
+      $('rtt').textContent = `round trip ${Math.round(performance.now() - pingSent[data.id])} ms`;
+      delete pingSent[data.id];
+    }
+    log(JSON.stringify(data));
+  };
+}
+
+async function send(obj) {
+  if (!base) throw new Error('not connected');
+  const r = await fetch(base + '/cmd', {
+    ...lnaOpts,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(obj),
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+$('connect').onclick = connect;
+$('addr').onkeydown = (e) => { if (e.key === 'Enter') connect(); };
+$('sendText').onclick = () => send({ type: 'setText', text: $('text').value }).catch((e) => log('send failed: ' + e.message, 'bad'));
+$('text').onkeydown = (e) => { if (e.key === 'Enter') $('sendText').click(); };
+$('ping').onclick = () => {
+  const id = Math.random().toString(36).slice(2);
+  pingSent[id] = performance.now();
+  send({ type: 'ping', id }).catch((e) => log('ping failed: ' + e.message, 'bad'));
+};
+
+if ($('addr').value) connect();
+</script>
+</body>
+</html>
