@@ -2,154 +2,308 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1419">
 <title>Phone Link</title>
 <style>
-  :root { --bg:#0f1419; --panel:#182029; --fg:#e6e8eb; --muted:#8a949e; --accent:#72d7ee; --ok:#5ecb8a; --bad:#ef6b6b; }
+  :root { --bg:#0f1419; --panel:#182029; --line:#2b3642; --fg:#e6e8eb; --muted:#8a949e; --accent:#72d7ee; --accent-ink:#06222b; --ok:#5ecb8a; --bad:#ef6b6b; }
   * { box-sizing:border-box; }
-  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:16px/1.4 system-ui, sans-serif; }
-  main { max-width:560px; margin:0 auto; display:grid; gap:12px; }
-  section { background:var(--panel); border-radius:12px; padding:14px; display:grid; gap:10px; }
-  h1 { font-size:20px; margin:0; }
-  h2 { font-size:14px; margin:0; color:var(--muted); text-transform:uppercase; letter-spacing:.05em; }
-  .row { display:flex; gap:8px; }
-  input { flex:1; min-width:0; padding:10px; border-radius:8px; border:1px solid #2b3642; background:#0c1116; color:var(--fg); font-size:16px; }
-  button { padding:10px 14px; border-radius:8px; border:0; background:var(--accent); color:#06222b; font-weight:600; font-size:16px; }
-  button.secondary { background:#2b3642; color:var(--fg); }
-  #state { font-weight:600; }
-  .ok { color:var(--ok); } .bad { color:var(--bad); } .muted { color:var(--muted); }
-  #log { height:260px; overflow:auto; font:13px/1.5 ui-monospace, monospace; background:#0c1116; border-radius:8px; padding:8px; margin:0; white-space:pre-wrap; word-break:break-all; }
-  #checks { margin:0; padding-left:18px; font-size:14px; }
+  html, body { margin:0; background:var(--bg); color:var(--fg); font:17px/1.4 system-ui, sans-serif; }
+  body { padding:12px 16px 32px; min-height:100dvh; }
+  main { max-width:520px; margin:0 auto; display:grid; gap:14px; }
+
+  #bar { display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); }
+  #bar .dot { width:8px; height:8px; border-radius:50%; background:var(--bad); flex:none; }
+  #bar.ok .dot { background:var(--ok); }
+  #bar .spacer { flex:1; }
+  #bar button { padding:4px 10px; font-size:13px; }
+
+  .card { background:var(--panel); border-radius:14px; padding:16px; display:grid; gap:12px; }
+  h1 { font-size:24px; margin:0; line-height:1.2; }
+  .prompt { font-size:22px; font-weight:600; line-height:1.3; }
+  .muted { color:var(--muted); }
+  .center { text-align:center; }
+  .big { font-size:20px; }
+
+  input, textarea { width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:#0c1116; color:var(--fg); font:inherit; }
+  textarea { min-height:96px; resize:vertical; }
+  button { padding:14px 16px; border-radius:10px; border:0; background:var(--accent); color:var(--accent-ink); font:inherit; font-weight:600; cursor:pointer; }
+  button.secondary { background:var(--line); color:var(--fg); }
+  button:disabled { opacity:.45; cursor:default; }
+  button.option { text-align:left; font-weight:500; background:#0c1116; color:var(--fg); border:2px solid var(--line); min-height:64px; }
+  button.option:not(:disabled):active { border-color:var(--accent); }
+
+  .players { list-style:none; margin:0; padding:0; display:grid; gap:6px; }
+  .players li { display:flex; justify-content:space-between; gap:8px; padding:10px 12px; background:#0c1116; border-radius:8px; }
+  .players li.offline { opacity:.5; }
+  .tag { font-size:12px; padding:2px 8px; border-radius:999px; background:var(--line); color:var(--muted); align-self:center; }
+  .tag.vip { background:var(--accent); color:var(--accent-ink); }
+
+  .timer { font-variant-numeric:tabular-nums; font-weight:700; color:var(--accent); }
+  .head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .result { padding:12px; border-radius:10px; background:#0c1116; display:grid; gap:4px; }
+  .result.win { outline:2px solid var(--ok); }
+  .counter { font-size:12px; text-align:right; }
+
+  #toast { position:fixed; left:16px; right:16px; bottom:20px; max-width:488px; margin:0 auto; padding:12px 14px; border-radius:10px; background:#f2f3f5; color:#111; font-size:15px; opacity:0; transform:translateY(12px); transition:.2s; pointer-events:none; }
+  #toast.show { opacity:1; transform:none; }
 </style>
 </head>
 <body>
 <main>
-  <h1>Phone Link test</h1>
-
-  <section>
-    <h2>Roku</h2>
-    <div class="row">
-      <input id="addr" placeholder="192.168.1.42:8888" inputmode="url" autocomplete="off">
-      <button id="connect">Connect</button>
-    </div>
-    <div>Status: <span id="state" class="muted">disconnected</span></div>
-    <ul id="checks"></ul>
-  </section>
-
-  <section>
-    <h2>Send</h2>
-    <div class="row">
-      <input id="text" placeholder="Text to show on TV">
-      <button id="sendText">Send</button>
-    </div>
-    <div class="row">
-      <button id="ping" class="secondary">Ping</button>
-      <span id="rtt" class="muted" style="align-self:center"></span>
-    </div>
-  </section>
-
-  <section>
-    <h2>Events from Roku</h2>
-    <pre id="log"></pre>
-  </section>
+  <div id="bar" hidden><span class="dot"></span><span id="barText"></span><span class="spacer"></span><button class="secondary" id="changeAddr">Change</button></div>
+  <div id="app"></div>
 </main>
+<div id="toast" role="status"></div>
 
 <script>
-const $ = (id) => document.getElementById(id);
-let base = null, es = null, pingSent = {};
+// Phone controller. It keeps no game state of its own: the Roku sends a full
+// snapshot ({type:"state", screen:"...", ...}) and we draw that screen.
 
-// Address: ?roku=ip:port beats saved value
-const params = new URLSearchParams(location.search);
-let saved = null;
-try { saved = localStorage.getItem('rokuAddr'); } catch {}
-$('addr').value = params.get('roku') || saved || '';
+// ------------------------------------------------------------------ utils
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
 
-function log(line, cls) {
-  const div = document.createElement('div');
-  div.textContent = new Date().toLocaleTimeString() + '  ' + line;
-  if (cls) div.className = cls;
-  $('log').prepend(div);
+// Tiny DOM builder: h('button', {class:'x', onclick: fn}, 'text', child...)
+function h(tag, props, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(props || {})) {
+    if (v == null || v === false) continue;
+    if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (k === 'class') el.className = v;
+    else if (k === 'value') el.value = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const kid of kids.flat()) if (kid != null && kid !== false) el.append(kid);
+  return el;
 }
-function setState(text, cls) { $('state').textContent = text; $('state').className = cls; }
-function check(label, ok, detail = '') {
-  const li = document.createElement('li');
-  li.className = ok ? 'ok' : 'bad';
-  li.textContent = (ok ? 'OK  ' : 'FAIL  ') + label + (detail ? ' - ' + detail : '');
-  $('checks').append(li);
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
-// targetAddressSpace tells Chromium's Local Network Access this is an intentional
-// local request (needed for the mixed-content exemption from an https page).
-const lnaOpts = { targetAddressSpace: 'local' };
+// ------------------------------------------------------------------ identity
+let playerId = store.get('playerId');
+if (!playerId) {
+  playerId = (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36)).toLowerCase();
+  store.set('playerId', playerId);
+}
 
-async function connect() {
-  const addr = $('addr').value.trim().replace(/^https?:\/\//, '').replace(/\/$/, '');
+// ------------------------------------------------------------------ connection
+const lnaOpts = { targetAddressSpace: 'local' }; // Chromium Local Network Access hint
+let base = null, es = null, state = null, renderedKey = null, deadline = 0;
+
+function connect(addr) {
+  addr = addr.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!addr) return;
-  try { localStorage.setItem('rokuAddr', addr); } catch {}
+  store.set('rokuAddr', addr);
   base = 'http://' + addr;
   if (es) es.close();
-  $('checks').innerHTML = '';
-  check('page origin', true, location.origin + (window.isSecureContext ? ' (secure)' : ' (not secure)'));
+  state = null; renderedKey = null;
+  setBar(false, 'Connecting to ' + addr + '...');
+  showMessage('Connecting...', 'Looking for the Roku at ' + addr);
 
-  // 1. simple GET: exercises LNA permission + mixed content + CORS response headers
-  setState('checking /status...', 'muted');
-  try {
-    const r = await fetch(base + '/status', { ...lnaOpts, cache: 'no-store' });
-    const j = await r.json();
-    check('GET /status', r.ok, `${j.name || ''} ${j.model || ''}`.trim());
-  } catch (e) {
-    check('GET /status', false, e.message + ' (permission denied, mixed content, CORS, or wrong address - see console)');
-    setState('failed', 'bad');
-    return;
-  }
-
-  // 2. JSON POST: exercises the CORS preflight (OPTIONS)
-  try {
-    await send({ type: 'ping', id: 'preflight-test' });
-    check('POST /cmd (preflight)', true);
-  } catch (e) {
-    check('POST /cmd (preflight)', false, e.message);
-  }
-
-  // 3. SSE stream for Roku -> phone
-  setState('opening event stream...', 'muted');
-  es = new EventSource(base + '/events');
-  es.onopen = () => { setState('connected', 'ok'); };
-  es.onerror = () => { setState('reconnecting...', 'bad'); };
+  es = new EventSource(`${base}/events?player=${encodeURIComponent(playerId)}`);
+  es.onopen = () => setBar(true, 'Connected to ' + addr);
+  es.onerror = () => setBar(false, 'Reconnecting to ' + addr + '...'); // EventSource retries by itself
   es.onmessage = (ev) => {
-    let data; try { data = JSON.parse(ev.data); } catch { data = ev.data; }
-    if (data.type === 'hello') check('SSE /events', true);
-    if (data.type === 'pong' && pingSent[data.id]) {
-      $('rtt').textContent = `round trip ${Math.round(performance.now() - pingSent[data.id])} ms`;
-      delete pingSent[data.id];
-    }
-    log(JSON.stringify(data));
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    if (msg.type === 'state') onState(msg);
+    else if (msg.type === 'toast') { unlockAll(); toast(msg.message); }
   };
 }
 
-async function send(obj) {
-  if (!base) throw new Error('not connected');
-  const r = await fetch(base + '/cmd', {
-    ...lnaOpts,
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(obj),
-  });
-  if (!r.ok) throw new Error('HTTP ' + r.status);
-  return r.json();
+async function send(cmd) {
+  if (!base) return;
+  try {
+    const r = await fetch(base + '/cmd', {
+      ...lnaOpts,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...cmd, playerId }),
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (e) {
+    unlockAll();
+    toast("Couldn't reach the Roku (" + e.message + ')');
+  }
 }
 
-$('connect').onclick = connect;
-$('addr').onkeydown = (e) => { if (e.key === 'Enter') connect(); };
-$('sendText').onclick = () => send({ type: 'setText', text: $('text').value }).catch((e) => log('send failed: ' + e.message, 'bad'));
-$('text').onkeydown = (e) => { if (e.key === 'Enter') $('sendText').click(); };
-$('ping').onclick = () => {
-  const id = Math.random().toString(36).slice(2);
-  pingSent[id] = performance.now();
-  send({ type: 'ping', id }).catch((e) => log('ping failed: ' + e.message, 'bad'));
+function setBar(ok, text) {
+  const bar = document.getElementById('bar');
+  bar.hidden = false;
+  bar.classList.toggle('ok', ok);
+  document.getElementById('barText').textContent = text;
+}
+document.getElementById('changeAddr').onclick = () => { if (es) es.close(); es = null; showConnect(); };
+
+// ------------------------------------------------------------------ rendering
+function onState(s) {
+  state = s;
+  deadline = s.secondsLeft != null ? Date.now() + s.secondsLeft * 1000 : 0;
+  render();
+}
+
+// Screens with text inputs keep their DOM while the same prompt is showing, so
+// unrelated snapshots (someone else joined, etc.) don't wipe what you're typing.
+function screenKey(s) {
+  if (s.screen === 'join') return 'join|' + (s.note || '');
+  if (s.screen === 'answer') return `answer|${s.round}|${s.matchup}`;
+  return null; // always redraw
+}
+
+function render() {
+  const key = screenKey(state);
+  if (key && key === renderedKey) { tickTimer(); return; }
+  renderedKey = key;
+  locked = [];
+  const draw = screens[state.screen] || screens.unknown;
+  const app = document.getElementById('app');
+  app.replaceChildren(draw(state));
+  const focus = app.querySelector('[autofocus]');
+  if (focus) focus.focus();
+  tickTimer();
+}
+
+function timerEl() { return h('span', { class: 'timer', id: 'timer' }); }
+function tickTimer() {
+  const el = document.getElementById('timer');
+  if (!el) return;
+  el.textContent = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) + 's' : '';
+}
+setInterval(tickTimer, 250);
+
+function showMessage(title, sub) {
+  document.getElementById('app').replaceChildren(
+    h('section', { class: 'card center' }, h('h1', null, title), sub && h('div', { class: 'muted' }, sub)));
+}
+
+// Controls disabled while a command is in flight; re-enabled if the Roku rejects
+// it (toast) or the request fails. A new snapshot replaces them anyway.
+let locked = [];
+function lock(el) { el.disabled = true; locked.push(el); return el; }
+function unlockAll() { locked.forEach((el) => { el.disabled = false; }); locked = []; }
+
+function playerRows(players, withScore) {
+  return h('ul', { class: 'players' }, players.map((p) =>
+    h('li', { class: p.online === false ? 'offline' : '' },
+      h('span', null, p.name),
+      withScore ? h('strong', null, String(p.score))
+        : p.vip ? h('span', { class: 'tag vip' }, 'VIP')
+        : p.online === false ? h('span', { class: 'tag' }, 'offline') : null)));
+}
+
+const screens = {
+  join(s) {
+    const input = h('input', { placeholder: 'Your name', maxlength: s.maxNameLen || 14, value: store.get('name') || '', autocomplete: 'off', enterkeyhint: 'go', autofocus: !s.note });
+    const go = h('button', { disabled: !!s.note }, 'Join');
+    const submit = () => {
+      const name = input.value.trim();
+      if (!name) return toast('Pick a name.');
+      store.set('name', name);
+      lock(go);
+      send({ type: 'join', name });
+    };
+    go.onclick = submit;
+    input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
+    return h('section', { class: 'card' }, h('h1', null, 'Join the game'),
+      s.note && h('div', { class: 'muted' }, s.note), input, go);
+  },
+
+  lobby(s) {
+    const start = s.me.vip && h('button', { disabled: !s.canStart, onclick: (e) => { lock(e.target); send({ type: 'start' }); } },
+      s.canStart ? 'Start game' : `Need ${s.minPlayers} players`);
+    return h('section', { class: 'card' },
+      h('h1', null, `You're in, ${s.me.name}!`),
+      h('div', { class: 'muted' }, s.me.vip ? "You're the VIP: start when everyone's here." : 'Waiting for the VIP to start...'),
+      playerRows(s.players, false),
+      start);
+  },
+
+  answer(s) {
+    const box = h('textarea', { maxlength: s.maxAnswerLen || 80, placeholder: 'Your answer', autofocus: true, enterkeyhint: 'send' });
+    const counter = h('div', { class: 'counter muted' }, `0/${s.maxAnswerLen || 80}`);
+    const btn = h('button', null, 'Submit');
+    const submit = () => {
+      const text = box.value.trim();
+      if (!text) return toast('Write something!');
+      lock(btn); lock(box);
+      send({ type: 'answer', matchup: s.matchup, text });
+    };
+    btn.onclick = submit;
+    box.oninput = () => { counter.textContent = `${box.value.length}/${s.maxAnswerLen || 80}`; };
+    box.onkeydown = (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } };
+    return h('section', { class: 'card' },
+      h('div', { class: 'head' }, h('span', { class: 'muted' }, `Round ${s.round}/${s.rounds} · ${s.remaining} left`), timerEl()),
+      h('div', { class: 'prompt' }, s.prompt),
+      box, counter, btn);
+  },
+
+  vote(s) {
+    const buttons = s.options.map((o, i) => h('button', {
+      class: 'option', disabled: o.mine,
+      onclick: () => { buttons.forEach(lock); send({ type: 'vote', matchup: s.matchup, choice: i }); },
+    }, o.text, o.mine ? h('span', { class: 'muted' }, '  (yours)') : null));
+    return h('section', { class: 'card' },
+      h('div', { class: 'head' }, h('span', { class: 'muted' }, 'Pick your favorite'), timerEl()),
+      h('div', { class: 'prompt' }, s.prompt),
+      buttons);
+  },
+
+  results(s) {
+    const top = Math.max(...s.options.map((o) => o.votes));
+    return h('section', { class: 'card' },
+      h('div', { class: 'prompt' }, s.prompt),
+      s.options.map((o) => h('div', { class: 'result' + (o.votes === top && top > 0 ? ' win' : '') },
+        h('div', { class: 'big' }, o.text),
+        h('div', { class: 'muted' }, `${o.author}${o.mine ? ' (you)' : ''} · ${o.votes} vote${o.votes === 1 ? '' : 's'} · +${o.points}`))));
+  },
+
+  scores(s) {
+    return h('section', { class: 'card' },
+      h('h1', null, s.final ? 'Final scores' : `Scores after round ${s.round}`),
+      playerRows(s.players, true),
+      s.canPlayAgain && h('button', { onclick: (e) => { lock(e.target); send({ type: 'playAgain' }); } }, 'Play again'),
+      s.final && !s.canPlayAgain && h('div', { class: 'muted center' }, 'Waiting for the VIP...'));
+  },
+
+  wait(s) {
+    return h('section', { class: 'card center' },
+      h('div', { class: 'big' }, s.message || 'Hang tight...'),
+      s.prompt && h('div', { class: 'muted' }, s.prompt),
+      timerEl());
+  },
+
+  unknown(s) {
+    return h('section', { class: 'card' }, h('div', { class: 'muted' }, `Unknown screen "${s.screen}". Is the site out of date?`));
+  },
 };
 
-if ($('addr').value) connect();
+// ------------------------------------------------------------------ connect screen
+function showConnect() {
+  document.getElementById('bar').hidden = true;
+  const input = h('input', { placeholder: '192.168.1.42:8888', value: store.get('rokuAddr') || '', inputmode: 'url', autocomplete: 'off', autofocus: true });
+  const go = h('button', { onclick: () => connect(input.value) }, 'Connect');
+  input.onkeydown = (e) => { if (e.key === 'Enter') go.click(); };
+  document.getElementById('app').replaceChildren(h('section', { class: 'card' },
+    h('h1', null, 'Connect to the TV'),
+    h('div', { class: 'muted' }, 'Enter the address shown at the bottom of the TV screen.'),
+    input, go));
+  input.focus();
+}
+
+// ?roku=ip:port (e.g. from a QR code on the TV) beats the saved address
+const fromUrl = new URLSearchParams(location.search).get('roku');
+const initial = fromUrl || store.get('rokuAddr');
+if (initial) connect(initial); else showConnect();
 </script>
 </body>
 </html>
