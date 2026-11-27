@@ -98,28 +98,52 @@ if (!playerId) {
 
 // ------------------------------------------------------------------ connection
 const lnaOpts = { targetAddressSpace: 'local' }; // Chromium Local Network Access hint
-let base = null, es = null, state = null, renderedKey = null, deadline = 0;
+let base = null, addrShown = '', es = null, state = null, renderedKey = null, deadline = 0;
+let lastHeard = 0; // last time anything (incl. the Roku's 5s ping) arrived on the stream
 
 function connect(addr) {
   addr = addr.trim().replace(/^https?:\/\//, '').replace(/\/+$/, '');
   if (!addr) return;
   store.set('rokuAddr', addr);
   base = 'http://' + addr;
-  if (es) es.close();
+  addrShown = addr;
   state = null; renderedKey = null;
   setBar(false, 'Connecting to ' + addr + '...');
   showMessage('Connecting...', 'Looking for the Roku at ' + addr);
+  openStream();
+}
 
+// (Re)open the event stream. Keeps the current screen; the Roku sends a fresh
+// snapshot as soon as the stream opens.
+function openStream() {
+  if (es) es.close();
+  lastHeard = Date.now();
   es = new EventSource(`${base}/events?player=${encodeURIComponent(playerId)}`);
-  es.onopen = () => setBar(true, 'Connected to ' + addr);
-  es.onerror = () => setBar(false, 'Reconnecting to ' + addr + '...'); // EventSource retries by itself
+  es.onopen = () => { lastHeard = Date.now(); setBar(true, 'Connected to ' + addrShown); };
+  es.onerror = () => setBar(false, 'Reconnecting to ' + addrShown + '...'); // EventSource retries by itself
   es.onmessage = (ev) => {
+    lastHeard = Date.now();
     let msg;
     try { msg = JSON.parse(ev.data); } catch { return; }
     if (msg.type === 'state') onState(msg);
     else if (msg.type === 'toast') { unlockAll(); toast(msg.message); }
+    // 'ping' and 'hello' only matter for lastHeard
   };
 }
+
+// A phone that sleeps or roams Wi-Fi can lose the TCP connection without either
+// side noticing, and EventSource then waits forever. The Roku pings every 5s, so
+// silence means the stream is dead: reopen it.
+function checkStream(maxSilenceMs) {
+  if (!es) return;
+  if (es.readyState === EventSource.CLOSED || Date.now() - lastHeard > maxSilenceMs) {
+    setBar(false, 'Reconnecting to ' + addrShown + '...');
+    openStream();
+  }
+}
+setInterval(() => checkStream(15000), 3000);
+// Coming back to the tab/screen is the most common moment for a dead stream.
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkStream(7000); });
 
 async function send(cmd) {
   if (!base) return;
